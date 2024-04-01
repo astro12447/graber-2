@@ -1,0 +1,4 @@
+https://google.com/
+b.com
+https://stackoverflow.com/questions/31480710/validate-url-with-standard-package-in-go
+https://ya.ru/?issue_tld=ru
