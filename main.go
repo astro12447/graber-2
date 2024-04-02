@@ -26,11 +26,11 @@ func GetPathFromCommandLine(src string, dst string) (string, string) {
 }
 
 // Get format  URS->(https://HostDomainName) links from  file data
-func ReadDataFromFile(fileName string) string {
-	//read file lines one by one line in memory
+func readDataFromFile(fileName string) (string, error) {
+	//read file lines, one by one line in memory
 	f, err := os.Open(fileName)
 	if err != nil {
-		fmt.Printf("anable to Open File: %v", err)
+		fmt.Printf("Anable to Open File: %v", err)
 	}
 	defer f.Close()
 	buf := make([]byte, 1024)
@@ -46,9 +46,11 @@ func ReadDataFromFile(fileName string) string {
 		if n > 0 {
 
 			FileContent = string(buf[:n])
+		} else {
+			fmt.Println("The sources Files Is Empty!")
 		}
 	}
-	return FileContent
+	return FileContent, nil
 }
 
 // Domain format(https://www.google.com/)
@@ -60,11 +62,12 @@ type Domain struct {
 }
 
 // Get Real url link from Experimetals Data Files
-func IsUrl(input string) bool {
+
+func isUrl(input string) bool {
 	flag := false
 	a, err := url.Parse(input)
 	if err != nil {
-		fmt.Print(err)
+		fmt.Println(input, "Is Empty!..")
 	}
 	url := Domain{schema: a.Scheme,
 		host:     a.Host,
@@ -80,30 +83,33 @@ func IsUrl(input string) bool {
 }
 
 // Get a valid Url from Random Data
-func GetUrlFromFile(FileName string) *list.List {
-	data := ReadDataFromFile(FileName)
+func getUrlFromfile(FileName string) (*list.List, error) {
+	data, err := readDataFromFile(FileName)
+	if err != nil {
+		panic(err)
+	}
 	lines := strings.Split(data, "\n")
 	l := list.New()
 	for _, item := range lines {
-		if IsUrl(item) == true {
+		if isUrl(item) == true && item != "" {
 			l.PushBack(item)
 		}
 	}
-	return l
+	return l, nil
 }
 
 // Create Random Files Names, Get names url Files
-func GethostnameFromURL(URL string) string {
+func GethostnameFromURL(URL string) (string, error) {
 	u, err := url.Parse(URL)
 	if err != nil {
 		log.Fatal("URL given not correcly!", URL)
 	}
 	hostname := u.Hostname()
-	return hostname
+	return hostname, nil
 }
 
 // Hostname to by equal Reponse Hostname file
-func ADDFileFormatFromHostName(hostname string) string {
+func addFileFormatFromHostName(hostname string) string {
 	lines := strings.Split(hostname, ".")
 	return lines[0] + ".txt"
 }
@@ -117,45 +123,41 @@ func CheckIsFileExist(filepath string) bool {
 	}
 	return info.IsDir()
 }
-func CreateFromCurrrentDirectory(Dir string) {
-
-}
-func IsEmpty(l *list.List) bool {
-	return l.Len() == 0
-}
 
 // Get Request from Client via FileData(urls)
-func RequestReponse(l *list.List) {
+func RequestReponse(l *list.List, dir string) error {
 	for e := l.Front(); e != nil; e = e.Next() {
-		host := GethostnameFromURL(e.Value.(string))
-		hostname := ADDFileFormatFromHostName(host)
+		host, err := GethostnameFromURL(e.Value.(string))
+		hostname := addFileFormatFromHostName(host)
 		resp, err := http.Get(e.Value.(string))
 		if err != nil {
 			fmt.Print(err)
 		}
 		defer resp.Body.Close()
 		body, err := io.ReadAll(resp.Body)
-		f := CreateFile(&hostname)
-		defer f.Close()
+		f, err := createFileFromDirectory(dir, &hostname)
 		f.WriteString(string(body))
 		if err != nil {
 			fmt.Print(err)
 		}
-		defer f.Close()
-		fmt.Print(f.Name(), " Was been writted succesfully.. ")
+		fmt.Print(hostname, " Was been writted succesfully..")
 		fmt.Print("\n")
 	}
+	return nil
 }
 
 // Creata a File given By Newfile Name
-func CreateFile(Newfile *string) *os.File {
-	file, err := os.Create(*Newfile)
-	if err != nil {
-		log.Fatalf("%v", file)
+func createFileFromDirectory(dir string, filename *string) (*os.File, error) {
+	_, err := os.Stat(dir)
+	if os.IsNotExist(err) {
+		fmt.Println("Directory does not exist!")
 	}
-	fmt.Print(file.Name(), "Was been created succesfully...")
-	fmt.Println()
-	return file
+	f, err := os.Create(strings.Join([]string{dir, *filename}, "/"))
+	if err != nil {
+		fmt.Print("Anable to create File", filename)
+	}
+	fmt.Println(*filename, " Was been Created")
+	return f, nil
 }
 
 // testcommit
@@ -167,9 +169,12 @@ func main() {
 	if s1 == "None" || s2 == "None" || s1 == "" || s2 == "" {
 		fmt.Println("->Introduce correct Command line:(--src=./file.txt  --dst=./)")
 	} else {
-		l := GetUrlFromFile(s1)
+		l, err := getUrlFromfile(s1)
+		if err != nil {
+			panic(err)
+		}
 		start := time.Now()
-		RequestReponse(l)
+		RequestReponse(l, s2)
 		end := time.Now()
 		elapse := end.Sub(start)
 		fmt.Println("Duration time elapse:", elapse)
