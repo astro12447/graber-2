@@ -114,6 +114,7 @@ func addFileFormatFromHostName(hostname string) string {
 	return lines[0] + ".txt"
 }
 
+// 1234
 // Create Files from giving path from command-lines(cmd)
 func CheckIsFileExist(filepath string) bool {
 	_, err := os.Stat(filepath)
