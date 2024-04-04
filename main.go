@@ -5,7 +5,6 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"net/url"
 	"os"
@@ -15,14 +14,16 @@ import (
 )
 
 // Получение  пути из командной строки (cmd).
-func GetPathFromCommandLine(src string, dst string) (string, string) {
+func GetPathFromCommandLine(src string, dst string) (string, string, error) {
+	if src == "None" || dst == "None" || src == "" || dst == "" {
+		fmt.Println("->Введите правильную командную строку:(--src=./file.txt  --dst=./)")
+	}
 	var sources *string
 	var destination *string
 	sources = flag.String(src, "None", "")
 	destination = flag.String(dst, "None", "")
 	flag.Parse()
-
-	return *sources, *destination
+	return *sources, *destination, nil
 }
 
 // Получение формат url ->(https://HostDomainName) ссылки из данных файла
@@ -30,7 +31,7 @@ func readDataFromFile(fileName string) (string, error) {
 	//читать строки файла, одну за другой в памяти
 	f, err := os.Open(fileName)
 	if err != nil {
-		fmt.Printf("Anable to Open File: %v", err)
+		fmt.Printf("Невозможно открыть файл: %v", err)
 	}
 	defer f.Close()
 	buf := make([]byte, 1024)
@@ -101,7 +102,7 @@ func getUrlFromfile(FileName string) (*list.List, error) {
 func GethostnameFromURL(URL string) (string, error) {
 	u, err := url.Parse(URL)
 	if err != nil {
-		log.Fatal("URL given not correcly!", URL)
+		fmt.Println("URL дано не правильно!", URL)
 	}
 	hostname := u.Hostname()
 	return hostname, nil
@@ -131,68 +132,100 @@ func createFileFromDirectory(dir string, filename *string) (*os.File, error) {
 	}
 	f, err := os.Create(strings.Join([]string{dir, *filename}, "/"))
 	if err != nil {
-		fmt.Print("Anable to create File", filename)
+		fmt.Print("Невозможно создать файл", *filename)
 	}
-	fmt.Println(*filename, " Был создан")
 	return f, nil
 }
 
-// testcommit
+func requestFromServer(s string) (*http.Response, error) {
+	resp, err := http.Get(s)
+	if err != nil {
+		panic(err)
+	}
+	return resp, nil
+}
+func readRepose(r io.Reader) ([]byte, error) {
+	body, err := io.ReadAll(r)
+	if err != nil {
+		fmt.Println(err)
+	}
+	return body, nil
+}
+func writeString(f *os.File, s string) (int, error) {
+	fi, err := f.WriteString(s)
+	if err != nil {
+		fmt.Println(err)
+	}
+	fmt.Println(f.Name(), "Был создан и записан успешно!")
+	return fi, nil
+}
+func closefile(file *os.File) {
+	defer file.Close()
+}
+func respClose(close io.Closer) {
+	defer close.Close()
+}
+func readAll(r io.Reader) ([]byte, error) {
+	scan, err := io.ReadAll(r)
+	if err != nil {
+		panic(err)
+	}
+	return scan, nil
+}
+
 func main() {
 	srcflag := "src"
 	dstflag := "dst"
-	src, dst := GetPathFromCommandLine(srcflag, dstflag)
-	start := time.Now()
-	if src == "None" || dst == "None" || src == "" || dst == "" {
-		fmt.Println("->Введите правильную командную строку:(--src=./file.txt  --dst=./)")
-	} else {
-		f, err := os.Open(src)
-		if err != nil {
-			fmt.Println(err)
-		}
-		defer f.Close()
-		scan, err := io.ReadAll(f)
-		if err != nil {
-			fmt.Println(err)
-		}
-		var wg sync.WaitGroup
-		urlarray := strings.Split(string(scan), "\n")
-		var urlarraycount int = 0
-		for urlarraycount < len(urlarray) {
-			if !isUrl(urlarray[urlarraycount]) || urlarray[urlarraycount] == "" {
-				urlarraycount++
-				continue
-			}
-			wg.Add(1)
-			var url = urlarray[urlarraycount]
-			go func(url string) {
-				defer wg.Done()
-				host, err := GethostnameFromURL(url)
-				hostname := addFileFormatFromHostName(host)
-				resp, err := http.Get(url)
-				if err != nil {
-					fmt.Print(err)
-					return
-				}
-				defer resp.Body.Close()
-				body, err := io.ReadAll(resp.Body)
-				if body == nil {
-					return
-				}
-				f, err := createFileFromDirectory(dst, &hostname)
-				defer f.Close()
-				fi, err := f.WriteString(string(body))
-				if err != nil {
-					fmt.Print(err, fi)
-					return
-				}
-				urlarraycount++
-			}(url)
-			wg.Wait()
-		}
-		end := time.Now()
-		elapse := end.Sub(start)
-		fmt.Println("время выполнения программы:", elapse)
+	src, dst, err := GetPathFromCommandLine(srcflag, dstflag)
+	fmt.Println(src, dst)
+	if err != nil {
+		panic(err)
 	}
-
+	start := time.Now()
+	f, err := os.Open(src)
+	if err != nil {
+		fmt.Println(err)
+	}
+	scan, err := readAll(f)
+	if err != nil {
+		fmt.Println(err)
+	}
+	var wg sync.WaitGroup
+	urlarray := strings.Split(string(scan), "\n")
+	for domain := range urlarray {
+		if !isUrl(urlarray[domain]) || urlarray[domain] == "" {
+			domain++
+			continue
+		}
+		wg.Add(1)
+		var url = urlarray[domain]
+		go func(url string) {
+			defer wg.Done()
+			host, err := GethostnameFromURL(url)
+			hostname := addFileFormatFromHostName(host)
+			resp, err := requestFromServer(url)
+			if err != nil {
+				fmt.Print(err)
+			}
+			body, err := readRepose(resp.Body)
+			respClose(resp.Body)
+			if err != nil {
+				panic(err)
+			}
+			f, err := createFileFromDirectory(dst, &hostname)
+			if err != nil {
+				panic(err)
+			}
+			fi, err := writeString(f, string(body))
+			closefile(f)
+			if err != nil {
+				fmt.Print(err, fi)
+			}
+			domain++
+		}(url)
+		wg.Wait()
+	}
+	end := time.Now()
+	elapse := end.Sub(start)
+	fmt.Println("время выполнения программы:", elapse)
 }

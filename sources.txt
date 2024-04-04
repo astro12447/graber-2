@@ -4,3 +4,6 @@ b.com
 
 https://stackoverflow.com/questions/31480710/validate-url-with-standard-package-in-go
 https://ya.ru/?issue_tld=ru
+https://www.bing.com
+https://go.dev/blog/error-handling-and-go
+https://ru.wikipedia.org/wiki/Заглавная_страница
