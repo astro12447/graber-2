@@ -113,6 +113,7 @@ func addFileFormatFromHostName(hostname string) string {
 	return arrayline[0] + ".txt"
 }
 
+// jfjjfjjjfjjf
 // Создание файлы, указав путь из командной строки (cmd)
 func CheckIsFileExist(filepath string) bool {
 	_, err := os.Stat(filepath)
