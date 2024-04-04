@@ -10,11 +10,11 @@ import (
 	"net/url"
 	"os"
 	"strings"
+	"sync"
 	"time"
 )
 
-// Get path location from command line(cmd).
-
+// Получение  пути из командной строки (cmd).
 func GetPathFromCommandLine(src string, dst string) (string, string) {
 	var sources *string
 	var destination *string
@@ -25,9 +25,9 @@ func GetPathFromCommandLine(src string, dst string) (string, string) {
 	return *sources, *destination
 }
 
-// Get format  URS->(https://HostDomainName) links from  file data
+// Получение формат url ->(https://HostDomainName) ссылки из данных файла
 func readDataFromFile(fileName string) (string, error) {
-	//read file lines, one by one line in memory
+	//читать строки файла, одну за другой в памяти
 	f, err := os.Open(fileName)
 	if err != nil {
 		fmt.Printf("Anable to Open File: %v", err)
@@ -47,13 +47,13 @@ func readDataFromFile(fileName string) (string, error) {
 
 			FileContent = string(buf[:n])
 		} else {
-			fmt.Println("The sources Files Is Empty!")
+			fmt.Println("Исходной файл пустый!")
 		}
 	}
 	return FileContent, nil
 }
 
-// Domain format(https://www.google.com/)
+// Формат домена(https://www.google.com/)
 type Domain struct {
 	schema   string
 	host     string
@@ -61,13 +61,12 @@ type Domain struct {
 	path     string
 }
 
-// Get Real url link from Experimetals Data Files
-
+// Получение реальный URL-ссылки из url данных.
 func isUrl(input string) bool {
 	flag := false
 	a, err := url.Parse(input)
 	if err != nil {
-		fmt.Println(input, "Is Empty!..")
+		fmt.Println(input, "Пусто!..")
 	}
 	url := Domain{schema: a.Scheme,
 		host:     a.Host,
@@ -82,7 +81,7 @@ func isUrl(input string) bool {
 	return flag
 }
 
-// Get a valid Url from Random Data
+// Получение действительный URL-адрес из файла данных
 func getUrlFromfile(FileName string) (*list.List, error) {
 	data, err := readDataFromFile(FileName)
 	if err != nil {
@@ -98,7 +97,7 @@ func getUrlFromfile(FileName string) (*list.List, error) {
 	return l, nil
 }
 
-// Create Random Files Names, Get names url Files
+// Получение названия файла через имени домена
 func GethostnameFromURL(URL string) (string, error) {
 	u, err := url.Parse(URL)
 	if err != nil {
@@ -108,14 +107,13 @@ func GethostnameFromURL(URL string) (string, error) {
 	return hostname, nil
 }
 
-// Hostname to by equal Reponse Hostname file
+// Имя хоста для равного файла имени хоста ответа
 func addFileFormatFromHostName(hostname string) string {
-	lines := strings.Split(hostname, ".")
-	return lines[0] + ".txt"
+	arrayline := strings.Split(hostname, ".")
+	return arrayline[0] + ".txt"
 }
 
-// 1234
-// Create Files from giving path from command-lines(cmd)
+// Создание файлы, указав путь из командной строки (cmd)
 func CheckIsFileExist(filepath string) bool {
 	_, err := os.Stat(filepath)
 	info, err := os.Stat(filepath)
@@ -125,59 +123,76 @@ func CheckIsFileExist(filepath string) bool {
 	return info.IsDir()
 }
 
-// Get Request from Client via FileData(urls)
-func RequestReponse(l *list.List, dir string) error {
-	for e := l.Front(); e != nil; e = e.Next() {
-		host, err := GethostnameFromURL(e.Value.(string))
-		hostname := addFileFormatFromHostName(host)
-		resp, err := http.Get(e.Value.(string))
-		if err != nil {
-			fmt.Print(err)
-		}
-		defer resp.Body.Close()
-		body, err := io.ReadAll(resp.Body)
-		f, err := createFileFromDirectory(dir, &hostname)
-		f.WriteString(string(body))
-		if err != nil {
-			fmt.Print(err)
-		}
-		fmt.Print(hostname, " Was been writted succesfully..")
-		fmt.Print("\n")
-	}
-	return nil
-}
-
-// Creata a File given By Newfile Name
+// Создание файла по имени Newfile
 func createFileFromDirectory(dir string, filename *string) (*os.File, error) {
 	_, err := os.Stat(dir)
 	if os.IsNotExist(err) {
-		fmt.Println("Directory does not exist!")
+		fmt.Println("Каталог не существует!")
 	}
 	f, err := os.Create(strings.Join([]string{dir, *filename}, "/"))
 	if err != nil {
 		fmt.Print("Anable to create File", filename)
 	}
-	fmt.Println(*filename, " Was been Created")
+	fmt.Println(*filename, " Был создан")
 	return f, nil
 }
 
 // testcommit
-
 func main() {
 	srcflag := "src"
 	dstflag := "dst"
-	s1, s2 := GetPathFromCommandLine(srcflag, dstflag)
-	if s1 == "None" || s2 == "None" || s1 == "" || s2 == "" {
-		fmt.Println("->Introduce correct Command line:(--src=./file.txt  --dst=./)")
+	src, dst := GetPathFromCommandLine(srcflag, dstflag)
+	start := time.Now()
+	if src == "None" || dst == "None" || src == "" || dst == "" {
+		fmt.Println("->Введите правильную командную строку:(--src=./file.txt  --dst=./)")
 	} else {
-		l, err := getUrlFromfile(s1)
+		f, err := os.Open(src)
 		if err != nil {
-			panic(err)
+			fmt.Println(err)
 		}
-		start := time.Now()
-		RequestReponse(l, s2)
+		defer f.Close()
+		scan, err := io.ReadAll(f)
+		if err != nil {
+			fmt.Println(err)
+		}
+		var wg sync.WaitGroup
+		urlarray := strings.Split(string(scan), "\n")
+		var urlarraycount int = 0
+		for urlarraycount < len(urlarray) {
+			if !isUrl(urlarray[urlarraycount]) || urlarray[urlarraycount] == "" {
+				urlarraycount++
+				continue
+			}
+			wg.Add(1)
+			var url = urlarray[urlarraycount]
+			go func(url string) {
+				defer wg.Done()
+				host, err := GethostnameFromURL(url)
+				hostname := addFileFormatFromHostName(host)
+				resp, err := http.Get(url)
+				if err != nil {
+					fmt.Print(err)
+					return
+				}
+				defer resp.Body.Close()
+				body, err := io.ReadAll(resp.Body)
+				if body == nil {
+					return
+				}
+				f, err := createFileFromDirectory(dst, &hostname)
+				defer f.Close()
+				fi, err := f.WriteString(string(body))
+				if err != nil {
+					fmt.Print(err, fi)
+					return
+				}
+				urlarraycount++
+			}(url)
+			wg.Wait()
+		}
 		end := time.Now()
 		elapse := end.Sub(start)
-		fmt.Println("Duration time elapse:", elapse)
+		fmt.Println("время выполнения программы:", elapse)
 	}
+
 }
